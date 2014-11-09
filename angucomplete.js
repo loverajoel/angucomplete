@@ -12,6 +12,7 @@ angular.module('angucomplete', [] )
             "id": "@id",
             "placeholder": "@placeholder",
             "selectedObject": "=selectedobject",
+            "callback": "=callback",
             "url": "@url",
             "dataField": "@datafield",
             "titleField": "@titlefield",
@@ -21,11 +22,14 @@ angular.module('angucomplete', [] )
             "inputClass": "@inputclass",
             "userPause": "@pause",
             "localData": "=localdata",
+            "resourceData": "=resourcedata",
             "searchFields": "@searchfields",
             "minLengthUser": "@minlength",
-            "matchClass": "@matchclass"
+            "matchClass": "@matchclass",
+            "imageClass": "@imageclass"
+
         },
-        template: '<div class="angucomplete-holder"><input id="{{id}}_value" ng-model="searchStr" type="text" placeholder="{{placeholder}}" class="{{inputClass}}" onmouseup="this.select();" ng-focus="resetHideResults()" ng-blur="hideResults()" /><div id="{{id}}_dropdown" class="angucomplete-dropdown" ng-if="showDropdown"><div class="angucomplete-searching" ng-show="searching">Searching...</div><div class="angucomplete-searching" ng-show="!searching && (!results || results.length == 0)">No results found</div><div class="angucomplete-row" ng-repeat="result in results" ng-click="selectResult(result)" ng-mouseover="hoverRow()" ng-class="{\'angucomplete-selected-row\': $index == currentIndex}"><div ng-if="imageField" class="angucomplete-image-holder"><img ng-if="result.image && result.image != \'\'" ng-src="{{result.image}}" class="angucomplete-image"/><div ng-if="!result.image && result.image != \'\'" class="angucomplete-image-default"></div></div><div class="angucomplete-title" ng-if="matchClass" ng-bind-html="result.title"></div><div class="angucomplete-title" ng-if="!matchClass">{{ result.title }}</div><div ng-if="result.description && result.description != \'\'" class="angucomplete-description">{{result.description}}</div></div></div></div>',
+        template: '<div class="angucomplete-holder"><input id="{{id}}_value" ng-model="searchStr" type="text" placeholder="{{placeholder}}" class="{{inputClass}}" onmouseup="this.select();" ng-focus="resetHideResults()" ng-blur="hideResults()" /><div id="{{id}}_dropdown" class="angucomplete-dropdown" ng-if="showDropdown"><div class="angucomplete-searching" ng-show="searching">Searching...</div><div class="angucomplete-searching" ng-show="!searching && (!results || results.length == 0)">No results found</div><div class="angucomplete-row" ng-repeat="result in results" ng-click="selectResult(result)" ng-mouseover="hoverRow()" ng-class="{\'angucomplete-selected-row\': $index == currentIndex}"><div ng-if="imageField" class="angucomplete-image-holder {{result.imageclass}}"><img ng-if="result.image && result.image != \'\'" ng-src="{{result.image}}" class="angucomplete-image"/><div ng-if="!result.image && result.image != \'\'" class="angucomplete-image-default"></div></div><div class="angucomplete-title" ng-if="matchClass" ng-bind-html="result.title"></div><div class="angucomplete-title" ng-if="!matchClass">{{ result.title }}</div><div ng-if="result.description && result.description != \'\'" class="angucomplete-description">{{result.description}}</div></div></div></div>',
 
         link: function($scope, elem, attrs) {
             $scope.lastSearchTerm = null;
@@ -37,6 +41,7 @@ angular.module('angucomplete', [] )
             $scope.pause = 500;
             $scope.minLength = 3;
             $scope.searchStr = null;
+
 
             if ($scope.minLengthUser && $scope.minLengthUser != "") {
                 $scope.minLength = $scope.minLengthUser;
@@ -82,6 +87,11 @@ angular.module('angucomplete', [] )
                             image = imageUri + responseData[i][$scope.imageField];
                         }
 
+                        var imageClass = ""
+                        if ($scope.imageClass) {
+                            imageClass = responseData[i][$scope.imageClass];
+                        }
+
                         var text = titleCode.join(' ');
                         if ($scope.matchClass) {
                             var re = new RegExp(str, 'i');
@@ -93,6 +103,7 @@ angular.module('angucomplete', [] )
                             title: text,
                             description: description,
                             image: image,
+                            imageclass: imageClass,
                             originalObject: responseData[i]
                         }
 
@@ -107,7 +118,6 @@ angular.module('angucomplete', [] )
 
             $scope.searchTimerComplete = function(str) {
                 // Begin the search
-
                 if (str.length >= $scope.minLength) {
                     if ($scope.localData) {
                         var searchFields = $scope.searchFields.split(",");
@@ -129,6 +139,16 @@ angular.module('angucomplete', [] )
                         $scope.searching = false;
                         $scope.processResults(matches, str);
 
+                    } else if ($scope.resourceData){
+                        var searchFields = $scope.searchFields.split(",");
+                        var params = {};
+                        angular.forEach(searchFields, function(a){
+                            params[a] = str;
+                        });
+                        $scope.resourceData(params).then(function(data) {
+                            $scope.searching = false;
+                            $scope.processResults((($scope.dataField) ? data[$scope.dataField] : data ), str);
+                        });
                     } else {
                         $http.get($scope.url + str, {}).
                             success(function(responseData, status, headers, config) {
@@ -188,8 +208,14 @@ angular.module('angucomplete', [] )
                 if ($scope.matchClass) {
                     result.title = result.title.toString().replace(/(<([^>]+)>)/ig, '');
                 }
+
+                if ($scope.callback && angular.isFunction($scope.callback)) {
+                    $scope.callback(result)
+                } else {
+                    $scope.selectedObject = result;
+                }
+
                 $scope.searchStr = $scope.lastSearchTerm = result.title;
-                $scope.selectedObject = result;
                 $scope.showDropdown = false;
                 $scope.results = [];
                 //$scope.$apply();
